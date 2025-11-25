@@ -61,9 +61,9 @@ cd nop-chaos
 - 安装依赖
 
 ```bash
-pnpm config set registry https://registry.npm.taobao.org
-pnpm config set ENTRYCLI_CDNURL=https://cdn.npm.taobao.org/dist/sentry-cli
-pnpm config set sentrycli_cdnurl=https://cdn.npm.taobao.org/dist/sentry-cli
+pnpm config set registry https://registry.npmmirror.com
+pnpm config set ENTRYCLI_CDNURL=https://registry.npmmirror.com/dist/sentry-cli
+pnpm config set sentrycli_cdnurl=https://registry.npmmirror.com/dist/sentry-cli
 
 pnpm install
 ```

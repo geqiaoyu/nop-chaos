@@ -14,6 +14,12 @@ export default defineConfig({
       threshold: 1024
     })
   ],
+optimizeDeps: {
+    include: [
+      'i18n-runtime'
+      // 如果还有其他类似的包，也一起加进来
+    ],
+  },  
   build: {
     rollupOptions: {
       output: {
