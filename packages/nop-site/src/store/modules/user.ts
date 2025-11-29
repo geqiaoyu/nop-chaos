@@ -200,7 +200,7 @@ export const useUserStore = defineStore({
       if (!this.getToken) {
         return null;
       }
-      const { userInfo, sysAllDictItems } = (await getUserInfo()) || {};
+      const userInfo  = (await getUserInfo()) || {};
       if (userInfo) {
         const { roles = [] } = userInfo;
         if (isArray(roles)) {
@@ -217,9 +217,9 @@ export const useUserStore = defineStore({
        * @updateBy:lsq
        * @updateDate:2021-09-08
        */
-      if (sysAllDictItems) {
-        this.setAllDictItems(sysAllDictItems);
-      }
+      //if (sysAllDictItems) {
+      //  this.setAllDictItems(sysAllDictItems);
+      //}
       return userInfo;
     },
     /**
