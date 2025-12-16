@@ -9,7 +9,7 @@ import * as React from "react";
 import React__default, { createElement, Fragment } from "react";
 import { ElDialog, ElButton } from "element-plus";
 import yaml from "js-yaml";
-import { createObject, resolveVariableAndFilter } from "amis-core";
+import { createObject, resolveVariableAndFilter, registerAction } from "amis-core";
 import { applyPureVueInReact, applyVueInReact } from "veaury";
 import * as ReactDom from "react-dom";
 const _sfc_main$7 = defineComponent({
@@ -880,6 +880,20 @@ Renderer({
   type: "xui-page-editor-button",
   autoVar: false
 })(XuiPageEditorButton);
+class AmisPageAction {
+  run(action, renderer, event, mergeData) {
+    const env = renderer.props.env;
+    const page = env._page;
+    let actionName = action.actionName;
+    if (actionName.startsWith("action://"))
+      actionName = actionName.substring("action://".length);
+    const actionFn = page.getAction(actionName);
+    if (!actionFn)
+      return Promise.reject(`unknown action:${action.actionName}`);
+    return Promise.resolve(actionFn(action.args, page, { action, renderer, event, mergeData }));
+  }
+}
+registerAction("page-action", new AmisPageAction());
 registerAdapter({
   dataMapping,
   alert,

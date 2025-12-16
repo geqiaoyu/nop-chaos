@@ -436,17 +436,31 @@ function argFloat(data: any, arg: ArgumentDefinition) {
     return parseFloat(v)
 }
 
+
+function mergeFilter(filterA: any, filterB: any) {
+    if (!filterA)
+        return filterB
+    if (!filterB)
+        return filterA
+    
+    return {
+        $type: 'and',
+        $body: [filterA, filterB]
+    }
+}
+
 /**
  * 通过 filter_XX__ge=3来表达 <ge name="XX" value="3" />这种过滤条件
  */
 function argQuery(data: any, arg: ArgumentDefinition, options: FetcherRequest) {
-    let query: QueryBean = {}
-    query.limit = data.limit ?? data.pageSize ?? data.perPage ?? 0
-    query.offset = data.offset ?? (query.limit! * ((data.page || 0) - 1))
-    query.orderBy = toOrderBy(data.orderBy ?? data.orderField, data.orderDir)
-    query.filter = toFilter(data)
-    query.cursor = data.cursor
-    query.timeout = data.timeout
+    let query: QueryBean = options.query || data.query || {}
+    query.limit = query.limit ?? data.limit ?? data.pageSize ?? data.perPage ?? 0
+    query.offset = query.offset ?? data.offset ?? (query.limit! * ((data.page || 0) - 1))
+    query.orderBy = query.orderBy ?? toOrderBy(data.orderBy ?? data.orderField, data.orderDir)
+    const filter = toFilter(data)
+    query.filter = mergeFilter(query.filter, filter);
+    query.cursor = query.cursor ?? data.cursor
+    query.timeout = query.timeout ?? data.timeout
 
     return query
 
@@ -521,6 +535,7 @@ function argQuery(data: any, arg: ArgumentDefinition, options: FetcherRequest) {
         return filter
     }
 }
+
 
 function argDataMap(data: any, arg: ArgumentDefinition) {
     if (data == null)

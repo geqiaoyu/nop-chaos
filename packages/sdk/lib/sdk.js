@@ -7,7 +7,7 @@ import { cloneDeep as cloneDeep$1, isNumber, isInteger as isInteger$1, isBoolean
 import axios from "axios";
 import { isArray as isArray$1, isPromise, isObject as isObject$2, isString as isString$1, isPlainObject as isPlainObject$2 } from "@vue/shared";
 import "systemjs/dist/system.js";
-import { noop as noop$5, themeable, localeable, uncontrollable, FormItem, autobind, createObject, resolveVariableAndFilter } from "amis-core";
+import { noop as noop$5, themeable, localeable, uncontrollable, FormItem, autobind, createObject, resolveVariableAndFilter, registerAction } from "amis-core";
 import * as React from "react";
 import React__default, { createContext, useState, useCallback as useCallback$1, useRef, version as version$2, isValidElement, useContext, useLayoutEffect as useLayoutEffect$1, useEffect, forwardRef, useMemo as useMemo$2, Children, useImperativeHandle, useReducer, Fragment, createElement } from "react";
 import { PickerContainer, ResultBox } from "amis-ui";
@@ -1013,14 +1013,25 @@ function argFloat(data, arg) {
     return null;
   return parseFloat(v);
 }
+function mergeFilter(filterA, filterB) {
+  if (!filterA)
+    return filterB;
+  if (!filterB)
+    return filterA;
+  return {
+    $type: "and",
+    $body: [filterA, filterB]
+  };
+}
 function argQuery(data, arg, options) {
-  let query = {};
-  query.limit = data.limit ?? data.pageSize ?? data.perPage ?? 0;
-  query.offset = data.offset ?? query.limit * ((data.page || 0) - 1);
-  query.orderBy = toOrderBy(data.orderBy ?? data.orderField, data.orderDir);
-  query.filter = toFilter(data);
-  query.cursor = data.cursor;
-  query.timeout = data.timeout;
+  let query = options.query || data.query || {};
+  query.limit = query.limit ?? data.limit ?? data.pageSize ?? data.perPage ?? 0;
+  query.offset = query.offset ?? data.offset ?? query.limit * ((data.page || 0) - 1);
+  query.orderBy = query.orderBy ?? toOrderBy(data.orderBy ?? data.orderField, data.orderDir);
+  const filter = toFilter(data);
+  query.filter = mergeFilter(query.filter, filter);
+  query.cursor = query.cursor ?? data.cursor;
+  query.timeout = query.timeout ?? data.timeout;
   return query;
   function toOrderBy(v, orderDir) {
     if (v == null)
@@ -1037,7 +1048,7 @@ function argQuery(data, arg, options) {
     return [v];
   }
   function toFilter(data2) {
-    let filter = {
+    let filter2 = {
       "$type": "and",
       "$body": []
     };
@@ -1067,19 +1078,19 @@ function argQuery(data, arg, options) {
           max = ary[1];
           value = void 0;
         }
-        filter.$body.push({ "$type": op, name, value, min, max });
+        filter2.$body.push({ "$type": op, name, value, min, max });
       }
     }
     if (options.filter) {
       if (options.filter.$type == "and" || options.filter.$type == "_" || options.filter.$type == "filter") {
-        filter.$body = filter.$body.concat(options.filter.$body || []);
+        filter2.$body = filter2.$body.concat(options.filter.$body || []);
       } else {
-        filter.$body.push(options.filter);
+        filter2.$body.push(options.filter);
       }
     }
-    if (filter.$body.length == 0)
+    if (filter2.$body.length == 0)
       return;
-    return filter;
+    return filter2;
   }
 }
 function argDataMap(data, arg) {
@@ -1251,7 +1262,7 @@ function ajaxFetch(options) {
       return Promise.reject(new Error("nop.err.unknown-action:" + actionName));
     }
     try {
-      let result = action(options);
+      let result = action(options, options._page);
       return Promise.resolve(result).then((res2) => {
         if (res2 == null)
           return fetcherOk(res2);
@@ -1440,14 +1451,56 @@ function useDebug() {
   };
 }
 const System = (typeof self !== "undefined" ? self : global).System;
-function importModule(path2) {
-  if (path2.endsWith(".lib.js") && path2.startsWith("/") && !path2.startsWith("/p/")) {
-    path2 = "/p/SystemJsProvider__getJs?path=" + encodeURIComponent(path2);
+const oldResolve = System.resolve;
+function normalizePath(path2) {
+  const parts = path2.split("/");
+  const stack = [];
+  for (const part of parts) {
+    if (part === "" || part === ".")
+      continue;
+    if (part === "..") {
+      if (stack.length > 0)
+        stack.pop();
+      continue;
+    }
+    stack.push(part);
   }
-  let url2 = System.resolve(path2);
+  const prefix2 = path2.startsWith("/") ? "/" : "";
+  return prefix2 + stack.join("/");
+}
+function dirname(path2) {
+  const idx = path2.lastIndexOf("/");
+  if (idx <= 0)
+    return "/";
+  return path2.slice(0, idx);
+}
+function resolveRelative(basePath, relative) {
+  const baseDir = dirname(basePath);
+  const combined = baseDir.endsWith("/") ? baseDir + relative : baseDir + "/" + relative;
+  return normalizePath(combined);
+}
+System.resolve = function(id, parentUrl) {
+  const providerPrefix = "/p/SystemJsProvider__getJs?path=";
+  if (id.endsWith(".lib.js")) {
+    if (id.startsWith("/") && !id.startsWith("/p/") && !id.startsWith("/public/")) {
+      return oldResolve.call(this, providerPrefix + encodeURIComponent(id), parentUrl);
+    }
+    if ((id.startsWith("./") || id.startsWith("../")) && parentUrl) {
+      const pos = parentUrl.indexOf(providerPrefix);
+      if (pos >= 0) {
+        const encoded = parentUrl.substring(pos + providerPrefix.length);
+        const basePath = decodeURIComponent(encoded);
+        const newPath = resolveRelative(basePath, id);
+        return oldResolve.call(this, providerPrefix + encodeURIComponent(newPath), parentUrl);
+      }
+    }
+  }
+  return oldResolve.call(this, id, parentUrl);
+};
+function importModule(path2) {
   return System.import(
     /*@vite-ignore*/
-    url2
+    path2
   );
 }
 function deleteDynamicModules() {
@@ -34083,6 +34136,20 @@ Renderer({
   type: "xui-page-editor-button",
   autoVar: false
 })(XuiPageEditorButton);
+class AmisPageAction {
+  run(action, renderer, event, mergeData) {
+    const env = renderer.props.env;
+    const page = env._page;
+    let actionName = action.actionName;
+    if (actionName.startsWith("action://"))
+      actionName = actionName.substring("action://".length);
+    const actionFn = page.getAction(actionName);
+    if (!actionFn)
+      return Promise.reject(`unknown action:${action.actionName}`);
+    return Promise.resolve(actionFn(action.args, page, { action, renderer, event, mergeData }));
+  }
+}
+registerAction("page-action", new AmisPageAction());
 registerAdapter({
   dataMapping,
   alert,

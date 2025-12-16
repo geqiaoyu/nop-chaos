@@ -14,6 +14,7 @@ export * from './react-adapter'
 
 import './AmisVueComponent'
 import './XuiPageEditorButton'
+import './page-action'
 
 import AmisVueComponent from './AmisVueComponent'
 import { registerAdapter, registerModule } from "@nop-chaos/nop-core"

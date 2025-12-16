@@ -1000,14 +1000,25 @@ function argFloat(data, arg) {
     return null;
   return parseFloat(v);
 }
+function mergeFilter(filterA, filterB) {
+  if (!filterA)
+    return filterB;
+  if (!filterB)
+    return filterA;
+  return {
+    $type: "and",
+    $body: [filterA, filterB]
+  };
+}
 function argQuery(data, arg, options) {
-  let query = {};
-  query.limit = data.limit ?? data.pageSize ?? data.perPage ?? 0;
-  query.offset = data.offset ?? query.limit * ((data.page || 0) - 1);
-  query.orderBy = toOrderBy(data.orderBy ?? data.orderField, data.orderDir);
-  query.filter = toFilter(data);
-  query.cursor = data.cursor;
-  query.timeout = data.timeout;
+  let query = options.query || data.query || {};
+  query.limit = query.limit ?? data.limit ?? data.pageSize ?? data.perPage ?? 0;
+  query.offset = query.offset ?? data.offset ?? query.limit * ((data.page || 0) - 1);
+  query.orderBy = query.orderBy ?? toOrderBy(data.orderBy ?? data.orderField, data.orderDir);
+  const filter = toFilter(data);
+  query.filter = mergeFilter(query.filter, filter);
+  query.cursor = query.cursor ?? data.cursor;
+  query.timeout = query.timeout ?? data.timeout;
   return query;
   function toOrderBy(v, orderDir) {
     if (v == null)
@@ -1024,7 +1035,7 @@ function argQuery(data, arg, options) {
     return [v];
   }
   function toFilter(data2) {
-    let filter = {
+    let filter2 = {
       "$type": "and",
       "$body": []
     };
@@ -1054,19 +1065,19 @@ function argQuery(data, arg, options) {
           max = ary[1];
           value = void 0;
         }
-        filter.$body.push({ "$type": op, name, value, min, max });
+        filter2.$body.push({ "$type": op, name, value, min, max });
       }
     }
     if (options.filter) {
       if (options.filter.$type == "and" || options.filter.$type == "_" || options.filter.$type == "filter") {
-        filter.$body = filter.$body.concat(options.filter.$body || []);
+        filter2.$body = filter2.$body.concat(options.filter.$body || []);
       } else {
-        filter.$body.push(options.filter);
+        filter2.$body.push(options.filter);
       }
     }
-    if (filter.$body.length == 0)
+    if (filter2.$body.length == 0)
       return;
-    return filter;
+    return filter2;
   }
 }
 function argDataMap(data, arg) {
@@ -1238,7 +1249,7 @@ function ajaxFetch(options) {
       return Promise.reject(new Error("nop.err.unknown-action:" + actionName));
     }
     try {
-      let result = action(options);
+      let result = action(options, options._page);
       return Promise.resolve(result).then((res2) => {
         if (res2 == null)
           return fetcherOk(res2);
@@ -1427,14 +1438,56 @@ function useDebug() {
   };
 }
 const System = (typeof self !== "undefined" ? self : global).System;
-function importModule(path) {
-  if (path.endsWith(".lib.js") && path.startsWith("/") && !path.startsWith("/p/")) {
-    path = "/p/SystemJsProvider__getJs?path=" + encodeURIComponent(path);
+const oldResolve = System.resolve;
+function normalizePath(path) {
+  const parts = path.split("/");
+  const stack = [];
+  for (const part of parts) {
+    if (part === "" || part === ".")
+      continue;
+    if (part === "..") {
+      if (stack.length > 0)
+        stack.pop();
+      continue;
+    }
+    stack.push(part);
   }
-  let url = System.resolve(path);
+  const prefix = path.startsWith("/") ? "/" : "";
+  return prefix + stack.join("/");
+}
+function dirname(path) {
+  const idx = path.lastIndexOf("/");
+  if (idx <= 0)
+    return "/";
+  return path.slice(0, idx);
+}
+function resolveRelative(basePath, relative) {
+  const baseDir = dirname(basePath);
+  const combined = baseDir.endsWith("/") ? baseDir + relative : baseDir + "/" + relative;
+  return normalizePath(combined);
+}
+System.resolve = function(id, parentUrl) {
+  const providerPrefix = "/p/SystemJsProvider__getJs?path=";
+  if (id.endsWith(".lib.js")) {
+    if (id.startsWith("/") && !id.startsWith("/p/") && !id.startsWith("/public/")) {
+      return oldResolve.call(this, providerPrefix + encodeURIComponent(id), parentUrl);
+    }
+    if ((id.startsWith("./") || id.startsWith("../")) && parentUrl) {
+      const pos = parentUrl.indexOf(providerPrefix);
+      if (pos >= 0) {
+        const encoded = parentUrl.substring(pos + providerPrefix.length);
+        const basePath = decodeURIComponent(encoded);
+        const newPath = resolveRelative(basePath, id);
+        return oldResolve.call(this, providerPrefix + encodeURIComponent(newPath), parentUrl);
+      }
+    }
+  }
+  return oldResolve.call(this, id, parentUrl);
+};
+function importModule(path) {
   return System.import(
     /*@vite-ignore*/
-    url
+    path
   );
 }
 function deleteDynamicModules() {

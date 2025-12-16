@@ -100,7 +100,7 @@ export function ajaxFetch(options: FetcherRequest): Promise<FetcherResult> {
 		}
 
 		try {
-			let result = action(options)
+			let result = action(options,options._page)
 			return Promise.resolve(result).then(res=>{
 				if(res == null)
 					return fetcherOk(res)
