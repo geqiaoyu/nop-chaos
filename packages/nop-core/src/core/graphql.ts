@@ -453,7 +453,7 @@ function mergeFilter(filterA: any, filterB: any) {
  * 通过 filter_XX__ge=3来表达 <ge name="XX" value="3" />这种过滤条件
  */
 function argQuery(data: any, arg: ArgumentDefinition, options: FetcherRequest) {
-    let query: QueryBean = options.query || data.query || {}
+    let query: QueryBean = data.query || {}
     query.limit = query.limit ?? data.limit ?? data.pageSize ?? data.perPage ?? 0
     query.offset = query.offset ?? data.offset ?? (query.limit! * ((data.page || 0) - 1))
     query.orderBy = query.orderBy ?? toOrderBy(data.orderBy ?? data.orderField, data.orderDir)
